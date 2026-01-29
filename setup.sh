@@ -14,6 +14,7 @@ declare -A dependency_map=(
     ["PDF"]="rpaframework-pdf"
     ["RPA.MOCK_SAP"]="rpa-sap-mock-bk"
     ["RPA.Moodle"]="rpa-moodle"
+    ["RPA.ERPNext"]="rpa-erpnext"
 )
 
 install_dependencies_from_robot_file() {
@@ -81,7 +82,36 @@ download_json_from_s3() {
     local object_name=$2
     
     echo "====== Downloading robot code ======"
+    echo "Bucket: s3://$bucket_name/$object_name"
+    
+    # Try to download the file
     aws s3 cp s3://$bucket_name/$object_name ./robot.json
+    local download_exit_code=$?
+    
+    # Check if download was successful
+    if [ $download_exit_code -ne 0 ]; then
+        echo "ERROR: Failed to download robot.json from S3 (exit code: $download_exit_code)"
+        echo "Please check:"
+        echo "  1. S3 bucket exists: $bucket_name"
+        echo "  2. Object exists: $object_name"
+        echo "  3. EC2 instance has proper IAM role/permissions"
+        return 1
+    fi
+    
+    # Verify the file was actually created
+    if [ ! -f "./robot.json" ]; then
+        echo "ERROR: robot.json file not found after download"
+        return 1
+    fi
+    
+    # Check if file is not empty
+    if [ ! -s "./robot.json" ]; then
+        echo "ERROR: robot.json file is empty"
+        return 1
+    fi
+    
+    echo "✓ robot.json downloaded successfully ($(stat -f%z "./robot.json" 2>/dev/null || stat -c%s "./robot.json") bytes)"
+    return 0
 }
 
 # Check if package installed  
@@ -153,7 +183,17 @@ function update_instance_state() {
 
 main() {
     update_instance_state setup
-    download_json_from_s3 "$bucket_name" "$object_name"
+    
+    # Download robot code from S3
+    if ! download_json_from_s3 "$bucket_name" "$object_name"; then
+        echo "FATAL: Cannot proceed without robot code"
+        update_instance_state failed
+        echo "====== Turning off Robot ======"
+        wait_for_sync
+        sudo shutdown now
+        exit 1
+    fi
+    
     robot_code=$(<robot.json)
 
     echo "====== Installing Dependencies ======"
@@ -165,10 +205,30 @@ main() {
     update_instance_state executing
     echo "====== Running Robot ======"
     python3 -m robot robot.json >> /var/log/robot.log 2>&1
+    robot_exit_code=$?
+    
+    echo "Robot execution completed with exit code: $robot_exit_code"
 
     update_instance_state cooldown
     echo "====== Update Robot Run Result ======"
-    python3 upload_run.py --output_xml_path="./output.xml" --user_id="$USER_ID" --process_id_version="$PROCESS_ID.$PROCESS_VERSION.detail" >> /var/log/robot.log 2>&1
+    
+    # Only upload results if output.xml exists
+    if [ -f "./output.xml" ]; then
+        echo "✓ output.xml found, uploading results..."
+        python3 upload_run.py --output_xml_path="./output.xml" --user_id="$USER_ID" --process_id_version="$PROCESS_ID.$PROCESS_VERSION.detail" >> /var/log/robot.log 2>&1
+        upload_exit_code=$?
+        
+        if [ $upload_exit_code -eq 0 ]; then
+            echo "✓ Results uploaded successfully"
+        else
+            echo "⚠ Failed to upload results (exit code: $upload_exit_code)"
+        fi
+    else
+        echo "⚠ WARNING: output.xml not found after robot execution"
+        echo "Robot exit code was: $robot_exit_code"
+        echo "This usually means the robot execution failed before generating output"
+        echo "Check /var/log/robot.log for details"
+    fi
 
     echo "====== Turning off Robot ======"
     wait_for_sync
