@@ -5,12 +5,12 @@ import pymysql
 from notification import *
 
 MAP_EVENT_TO_ARN = {
-    'event-gmail': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewEmailsFunction-cWQgt8S1jxLY',
-    'event-drive': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewFilesFunction-Qen72azOFMeF',
-    'event-forms': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewResponsesFunction-kbAmYT7v7Ly8',
+    'event-gmail': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewEmailsFunction-x00iwDPvEQXr',
+    'event-drive': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewFilesFunction-ecqRwOPcGZk5',
+    'event-forms': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewResponsesFunction-4EiwCv5GVWfP',
 }
 
-RUN_ROBOT_ARN = 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-RunRobotFunction-8sVtvmT4CL62'
+RUN_ROBOT_ARN = 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-RunRobotFunction-CGVg2ON5Z83i'
 
 def get_secret():
     secret_name = "edu-rpa/dev/secrets"

@@ -153,3 +153,56 @@ def reboot_ec2_robot(instanceId):
 def terminate_ec2_robot(instanceId):
     response = ec2_client.terminate_instances(InstanceIds = [instanceId])
     return response["TerminatingInstances"][0]
+
+
+def run_ssm_command(instance_id, command, timeout_seconds=600):
+    """
+    Run a shell command on EC2 instance via AWS SSM Run Command.
+    The instance must have SSM agent installed and proper IAM role.
+    
+    Args:
+        instance_id: EC2 instance ID
+        command: Shell command to execute
+        timeout_seconds: Command timeout (default 10 minutes)
+    
+    Returns:
+        SSM command response with CommandId
+    """
+    response = ssm_client.send_command(
+        InstanceIds=[instance_id],
+        DocumentName="AWS-RunShellScript",
+        Parameters={
+            "commands": [command],
+            "executionTimeout": [str(timeout_seconds)]
+        },
+        TimeoutSeconds=timeout_seconds,
+        Comment=f"Robot simulate execution on {instance_id}"
+    )
+    
+    return {
+        "CommandId": response["Command"]["CommandId"],
+        "Status": response["Command"]["Status"],
+        "InstanceId": instance_id
+    }
+
+
+def get_ssm_command_status(command_id, instance_id):
+    """
+    Get the status of an SSM command execution.
+    
+    Returns:
+        Command invocation details including status and output
+    """
+    try:
+        response = ssm_client.get_command_invocation(
+            CommandId=command_id,
+            InstanceId=instance_id
+        )
+        return {
+            "Status": response["Status"],
+            "StatusDetails": response.get("StatusDetails"),
+            "StandardOutputContent": response.get("StandardOutputContent", ""),
+            "StandardErrorContent": response.get("StandardErrorContent", "")
+        }
+    except ssm_client.exceptions.InvocationDoesNotExist:
+        return {"Status": "NotFound", "StatusDetails": "Command invocation not found"}

@@ -31,8 +31,8 @@ def handle_create_schedule(user_id, process_id, version, create_schedule_dto):
             'Mode': 'OFF'
         },
         'Target': {
-            'Arn': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-RunRobotFunction-8sVtvmT4CL62',
-            'RoleArn': 'arn:aws:iam::678601387840:role/Robot_Scheduler_Role',
+            'Arn': 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-RunRobotFunction-CGVg2ON5Z83i ',
+            'RoleArn': 'arn:aws:iam::825765386107:role/Robot_Scheduler_Role',
             'Input': json.dumps({
                 "body": {
                     "user_id": user_id,
