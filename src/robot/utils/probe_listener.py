@@ -117,7 +117,12 @@ class ProbeListener:
 
     def __init__(self):
         global _step_mode, _continue_event
-        
+        try:
+            import socketio
+        except ImportError:
+            sys.stderr.write("[ProbeListener] socketio not installed\n")
+            sys.stderr.flush()
+            return
         # Read STEP_MODE fresh from environment (set by setup.sh before running robot)
         _step_mode = os.environ.get("STEP_MODE", "step")
         sys.stdout.write(f"[ProbeListener] Initialized with STEP_MODE={_step_mode}\n")

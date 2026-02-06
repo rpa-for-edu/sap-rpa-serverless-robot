@@ -39,7 +39,7 @@ def success_response(body):
         'body': json.dumps(body, default=str)
     }
 
-def handle_launch_instance(user_id, process_id, version, trigger_type):
+def handle_launch_instance(user_id, process_id, version, trigger_type, simulateMode=False):
     robot_table = get_robot_table()
 
     try:
@@ -63,7 +63,7 @@ def handle_launch_instance(user_id, process_id, version, trigger_type):
         "launchTime": str(launch_time),
         "instanceId": instance_id,
         "instanceState": state,
-        "simulateMode": False,  # Normal mode - will shutdown after execution
+        "simulateMode": simulateMode,  # Normal mode - will shutdown after execution
     }
 
     try:
@@ -134,7 +134,7 @@ def get_instance_name(instance_id):
     return response["Reservations"][0]["Instances"][0]["Tags"][0]["Value"]
 
 
-def handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type="step-by-step", is_running=False, force_restart=False):
+# def handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type="step-by-step", is_running=False, force_restart=False):
     """
     Handle robot simulation mode.
     - If is_running=False: Start EC2 instance 
@@ -206,7 +206,7 @@ echo "Running robot in simulate mode with STEP_MODE=$STEP_MODE (force_restart=tr
 
 # Run the robot
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-python3 -m robot --listener robot.utils.probe_listener.ProbeListener --output NONE --log NONE --report NONE robot.json >> /var/log/robot.log 2>&1
+python3 -m robot --listener probe_listener.ProbeListener --output NONE --log NONE --report NONE robot.json >> /var/log/robot.log 2>&1
 
 # Reset idle timer after robot execution
 echo $(date +%s) > /tmp/last_robot_activity
@@ -227,7 +227,7 @@ echo "Running robot in simulate mode with STEP_MODE=$STEP_MODE"
 
 # Run the robot
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-python3 -m robot --listener robot.utils.probe_listener.ProbeListener --output NONE --log NONE --report NONE robot.json >> /var/log/robot.log 2>&1
+python3 -m robot --listener probe_listener.ProbeListener --output NONE --log NONE --report NONE robot.json >> /var/log/robot.log 2>&1
 
 # Reset idle timer after robot execution
 echo $(date +%s) > /tmp/last_robot_activity
