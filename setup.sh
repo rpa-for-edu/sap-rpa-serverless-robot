@@ -77,6 +77,128 @@ install_dependencies_from_robot_file() {
     fi
 }
 
+install_s3_dependencies() {
+    local robot_code=$1
+    echo "====== Checking for Custom S3 Libraries ======"
+    # Extract s3Libraries array from robot.json
+    local s3_libraries=$(jq -r '.s3Libraries[]?' <<< "$robot_code")
+    
+    if [[ -n "$s3_libraries" ]]; then
+        # Use jq to extract objects and iterate properly to handle spaces or special chars if any
+        # But for simple structure, reading s3Path directly is safer
+        # Let's extract s3Path directly
+        local paths=$(jq -r '.s3Libraries[].s3Path' <<< "$robot_code")
+        
+        for library_url in $paths; do
+            echo "Processing custom library: $library_url"
+            local filename=$(basename "$library_url")
+            
+            echo "Downloading $library_url..."
+            
+            if [[ "$library_url" == s3://* ]]; then
+                # S3 URI
+                if aws s3 cp "$library_url" "./$filename"; then
+                    echo "✓ S3 Download successful"
+                else
+                    echo "ERROR: Failed to download from S3: $library_url"
+                    continue
+                fi
+            elif [[ "$library_url" == https://* ]]; then
+                # HTTPS URL
+                if curl -L -o "./$filename" "$library_url"; then
+                     echo "✓ HTTPS Download successful"
+                else
+                     echo "ERROR: Failed to download from URL: $library_url"
+                     continue
+                fi
+            else
+                echo "ERROR: Unsupported protocol for library: $library_url"
+                continue
+            fi
+
+            echo "Installing $filename..."
+
+            # Auto-convert HTTPS S3 URLs to s3:// format to use authenticated download
+            if [[ "$s3_path" == https://* && ("$s3_path" == *".s3."* || "$s3_path" == *"s3.amazonaws.com"*) ]]; then
+                echo "  ℹ️  Detected S3 HTTPS URL, converting to s3:// uri for authenticated download..."
+                # Handle formats:
+                # 1. https://BUCKET.s3.REGION.amazonaws.com/KEY
+                # 2. https://s3.REGION.amazonaws.com/BUCKET/KEY (less common but possible)
+                
+                if [[ "$s3_path" =~ https://([^.]+)\.s3\.[^/]+/(.+) ]]; then
+                    # Format 1
+                    BUCKET="${BASH_REMATCH[1]}"
+                    KEY="${BASH_REMATCH[2]}"
+                    s3_path="s3://$BUCKET/$KEY"
+                    echo "  🔄 Converted to: $s3_path"
+                elif [[ "$s3_path" =~ https://s3\.[^/]+/([^/]+)/(.+) ]]; then
+                    # Format 2
+                    BUCKET="${BASH_REMATCH[1]}"
+                    KEY="${BASH_REMATCH[2]}"
+                    s3_path="s3://$BUCKET/$KEY"
+                    echo "  🔄 Converted to: $s3_path"
+                fi
+            fi
+            
+            # Check file extension
+            if [[ "$filename" == *.py ]]; then
+                echo "Detected Python source file (Custom Library). Moving to ./src/ ..."
+                mkdir -p ./src
+                
+                TARGET_FILE="./src/$filename"
+                
+                # Move the already downloaded file to src
+                if [ -f "./$filename" ]; then
+                    mv "./$filename" "$TARGET_FILE"
+                    echo "✓ Library $filename moved to ./src/"
+                else
+                    echo "ERROR: Source file ./$filename not found for move"
+                fi
+                
+                # Parse and install dependencies from file header
+                # Format: # DEPENDENCIES: pandas, requests, numpy
+                if [ -f "$TARGET_FILE" ]; then
+                    echo "  Checking dependencies in $TARGET_FILE ..."
+                    # Use awk for robust parsing (handles multiple spaces, tabs) and tr to remove carriage returns
+                    DEPS=$(awk 'BEGIN{IGNORECASE=1} /^# *DEPENDENCIES:/ {sub(/^# *DEPENDENCIES:/, ""); gsub(/,/, " "); print $0; exit}' "$TARGET_FILE" | tr -d '\r')
+                    
+                    # Trim leading/trailing whitespace
+                    DEPS=$(echo "$DEPS" | xargs)
+                    
+                    if [ ! -z "$DEPS" ]; then
+                        echo "  📦 Found dependencies: '$DEPS'"
+                        echo "  Installing dependencies..."
+                        if pip install $DEPS; then
+                            echo "  ✓ Dependencies installed successfully"
+                        else
+                            echo "  ⚠️  Failed to install: $DEPS"
+                        fi
+                    else
+                        echo "  ℹ️  No dependencies found in file header."
+                        # DEBUG: Print header to see why regex failed if expected
+                        head -n 1 "$TARGET_FILE"
+                    fi
+                fi
+            else
+                # For non-py files (packages), install via pip
+                # File is already downloaded to ./$filename or ./cache
+                # But wait, original code downloaded to ./$filename
+                # Let's adjust to use that file
+                
+                echo "Installing package $filename..."
+                if pip install "./$filename"; then
+                    echo "✓ Successfully installed $filename"
+                else
+                    echo "ERROR: Failed to install $filename"
+                fi
+                rm -f "./$filename"
+            fi
+        done
+    else
+        echo "No custom S3 libraries defined in robot.json"
+    fi
+}
+
 # Download JSON file from S3
 download_json_from_s3() {
     local bucket_name=$1
@@ -269,9 +391,22 @@ main() {
 
     echo "====== Installing Dependencies ======"
     install_dependencies_from_robot_file "$robot_code"
+    
+    echo "====== Installing Custom S3 Dependencies ======"
+    install_s3_dependencies "$robot_code"
 
     echo "====== Get Robot Credentials ======"
     get-credential
+    # The user's instruction included an 'else' block here, which implies a preceding 'if' statement
+    # around 'get-credential'. Since the original code does not have such an 'if',
+    # and to maintain syntactic correctness, I'm inserting the debug lines directly.
+    # If 'get-credential' is intended to be part of an 'if' statement, that 'if' needs to be added.
+    # Assuming the 'else' and 'fi' were part of a larger, unprovided context for 'get-credential'
+    # and the primary goal is to add the debug lines.
+    
+    echo "====== DEBUG: devdata content ======"
+    ls -R ./devdata/ 2>/dev/null
+    cat ./devdata/*.json 2>/dev/null || echo "No json files in devdata"
 
     # Check if simulate mode is enabled
     check_simulate_mode
@@ -286,7 +421,26 @@ main() {
     echo $(date +%s) > /tmp/last_robot_activity
     
     export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-    python3 -m robot --listener robot.utils.probe_listener.ProbeListener --output NONE --log NONE --report NONE robot.json >> /var/log/robot.log 2>&1
+    
+    # Create execution-only robot.json (remove s3Libraries)
+    echo "====== Processing robot.json (Python method) ======"
+    if python3 -c "import json; d=json.load(open('robot.json')); d.pop('s3Libraries', None); json.dump(d, open('robot_exec.json', 'w'))"; then
+        if [ -s robot_exec.json ]; then
+            echo "✓ robot_exec.json created successfully (Size: $(stat -c%s robot_exec.json 2>/dev/null || stat -f%z robot_exec.json) bytes)"
+        else
+            echo "ERROR: robot_exec.json is empty after Python processing"
+            update_instance_state failed
+            exit 1
+        fi
+    else
+        echo "ERROR: Python failed to process robot.json"
+        cat robot.json
+        update_instance_state failed
+        exit 1
+    fi
+    
+    # Enable logging for debugging
+    python3 -m robot --console verbose --output output.xml --log log.html --report report.html robot_exec.json >> /var/log/robot.log 2>&1
 
     robot_exit_code=$?
     
