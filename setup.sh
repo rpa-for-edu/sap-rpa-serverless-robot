@@ -2,7 +2,6 @@
 
 bucket_name="rpa-robot-bktest"
 object_name="$ROBOT_FILE"
-IDLE_TIMEOUT=600  # 10 minutes in seconds for simulate mode auto-shutdown
 
 # Dependency map
 declare -A dependency_map=(
@@ -21,7 +20,7 @@ declare -A dependency_map=(
 install_dependencies_from_robot_file() {
     # Read the contents of the Robot Framework file
     local robot_code=$1
-    local dependencies=("robotframework" "rpaframework" "importlib-metadata>=6.0.0" "websocket-client")
+    local dependencies=("robotframework" "rpaframework" "importlib-metadata>=6.0.0")
     
     imports=$(jq -r '.resource.imports[].name' <<< "$robot_code")
     
@@ -304,76 +303,6 @@ function update_instance_state() {
         --return-values ALL_NEW
 }
 
-# Fetch run_type from DynamoDB and set STEP_MODE environment variable
-fetch_run_type() {
-    echo "====== Fetching Run Type from DynamoDB ======"
-    local user_id="$USER_ID"
-    local process_id_version="$PROCESS_ID.$PROCESS_VERSION"
-    
-    RUN_TYPE=$(aws dynamodb get-item \
-        --table-name robot \
-        --region ap-southeast-1 \
-        --key '{"userId": {"S": "'"$user_id"'"}, "processIdVersion": {"S": "'"$process_id_version"'"}}' \
-        --projection-expression "runType" \
-        --output json | jq -r '.Item.runType.S // "run-all"')
-    
-    echo "Fetched RUN_TYPE: $RUN_TYPE"
-    
-    # Map run_type to STEP_MODE for robot listener
-    # run-all -> all (continuous execution)
-    # step-by-step -> step (wait for FE signal)
-    if [ "$RUN_TYPE" == "step-by-step" ]; then
-        export STEP_MODE="step"
-    else
-        export STEP_MODE="all"
-    fi
-    
-    echo "Set STEP_MODE=$STEP_MODE"
-}
-
-# Check if simulate mode is enabled from DynamoDB
-check_simulate_mode() {
-    echo "====== Checking Simulate Mode ======"
-    local user_id="$USER_ID"
-    local process_id_version="$PROCESS_ID.$PROCESS_VERSION"
-    
-    SIMULATE_MODE=$(aws dynamodb get-item \
-        --table-name robot \
-        --region ap-southeast-1 \
-        --key '{"userId": {"S": "'"$user_id"'"}, "processIdVersion": {"S": "'"$process_id_version"'"}}' \
-        --projection-expression "simulateMode" \
-        --output json | jq -r '.Item.simulateMode.BOOL // false')
-    
-    echo "Simulate Mode: $SIMULATE_MODE"
-}
-
-# Background process to monitor idle time and shutdown if inactive
-idle_monitor() {
-    echo "====== Starting Idle Monitor (timeout: ${IDLE_TIMEOUT}s) ======"
-    
-    # Initialize activity timestamp
-    echo $(date +%s) > /tmp/last_robot_activity
-    
-    while true; do
-        sleep 60  # Check every minute
-        
-        if [ -f /tmp/last_robot_activity ]; then
-            last_activity=$(cat /tmp/last_robot_activity)
-            current_time=$(date +%s)
-            idle_time=$((current_time - last_activity))
-            
-            echo "[Idle Monitor] Idle time: ${idle_time}s / ${IDLE_TIMEOUT}s"
-            
-            if [ $idle_time -ge $IDLE_TIMEOUT ]; then
-                echo "[Idle Monitor] Idle timeout reached. Shutting down..."
-                update_instance_state stopped
-                sudo shutdown now
-                exit 0
-            fi
-        fi
-    done
-}
-
 main() {
     update_instance_state setup
     
@@ -445,9 +374,6 @@ main() {
     robot_exit_code=$?
     
     echo "Robot execution completed with exit code: $robot_exit_code"
-    
-    # Update activity timestamp after robot execution
-    echo $(date +%s) > /tmp/last_robot_activity
 
     update_instance_state cooldown
     echo "====== Update Robot Run Result ======"
@@ -470,27 +396,9 @@ main() {
         echo "Check /var/log/robot.log for details"
     fi
 
-    # Check simulate mode for shutdown behavior
-    if [ "$SIMULATE_MODE" == "true" ]; then
-        echo "====== SIMULATE MODE: EC2 will stay running ======"
-        echo "EC2 will auto-shutdown after ${IDLE_TIMEOUT}s of inactivity"
-        
-        # Update state to running (ready for next simulation via SSM)
-        update_instance_state running
-        
-        # Start idle monitor (will handle auto-shutdown)
-        idle_monitor &
-        IDLE_MONITOR_PID=$!
-        echo "Idle monitor started with PID: $IDLE_MONITOR_PID"
-        
-        # Keep script running to maintain idle monitor
-        wait $IDLE_MONITOR_PID
-    else
-        # Normal mode - shutdown after execution
-        echo "====== Turning off Robot ======"
-        wait_for_sync
-        sudo shutdown now
-    fi
+    echo "====== Turning off Robot ======"
+    wait_for_sync
+    sudo shutdown now
 }
 
 main

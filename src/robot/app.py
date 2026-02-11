@@ -15,9 +15,9 @@ def run_robot(event, context):
     process_id = body['process_id']
     version = body['version']
     trigger_type = body['trigger_type']
-    is_simulate = body['is_simulate']
-    if is_simulate:
-        return run_robot_simulate(event, body)
+    # # is_simulate = body.get('is_simulate', False)
+    # if is_simulate:
+    #     return run_robot_simulate(event, body)
     try:
         robot_response = robot_table.get_item(Key = {"userId": user_id, "processIdVersion": f'{process_id}.{version}'})
     except botocore.exceptions.ClientError as err: 
@@ -33,52 +33,52 @@ def run_robot(event, context):
         else:
             return error_response(400, "Robot Instance Not Stable", "Wait for a while and try again.")
     else:
-        return handle_launch_instance(user_id, process_id, version, trigger_type)
+        return handle_launch_instance(user_id, process_id, version, trigger_type, False)
 
 
-def run_robot_simulate(event, body):
-    """
-    Lambda function for simulation mode.
-    - If instance stopped -> start instance
-    - If instance running -> use SSM Run Command to trigger robot execution
-    - If instance executing and force_restart=true -> kill current process and restart
-    - EC2 will NOT shutdown after robot execution, auto-shutdown after 10min idle
+# def run_robot_simulate(event, body):
+#     """
+#     Lambda function for simulation mode.
+#     - If instance stopped -> start instance
+#     - If instance running -> use SSM Run Command to trigger robot execution
+#     - If instance executing and force_restart=true -> kill current process and restart
+#     - EC2 will NOT shutdown after robot execution, auto-shutdown after 10min idle
     
-    Precondition: Instance must be launched before (use run_robot first time)
-    """
-    print(f'Event (Simulate): {json_prettier(event)}')
-    robot_table = get_robot_table()
-    user_id = body['user_id']
-    process_id = body['process_id']
-    version = body['version']
-    run_type = body.get('run_type', 'step-by-step')  # Default to step-by-step for simulation
-    force_restart = body.get('force_restart', False)  # Allow force restart when executing
+#     Precondition: Instance must be launched before (use run_robot first time)
+#     """
+#     print(f'Event (Simulate): {json_prettier(event)}')
+#     robot_table = get_robot_table()
+#     user_id = body['user_id']
+#     process_id = body['process_id']
+#     version = body['version']
+#     run_type = body.get('run_type', 'step-by-step')  # Default to step-by-step for simulation
+#     force_restart = body.get('force_restart', False)  # Allow force restart when executing
+#     trigger_type = body['trigger_type']
+#     try:
+#         robot_response = robot_table.get_item(Key={"userId": user_id, "processIdVersion": f'{process_id}.{version}'})
+#     except botocore.exceptions.ClientError as err:
+#         robot_response = None
 
-    try:
-        robot_response = robot_table.get_item(Key={"userId": user_id, "processIdVersion": f'{process_id}.{version}'})
-    except botocore.exceptions.ClientError as err:
-        robot_response = None
-
-    if robot_response and "Item" in robot_response:
-        instance_id = robot_response["Item"]["instanceId"]
-        instance_state = robot_response["Item"]["instanceState"]
+#     if robot_response and "Item" in robot_response:
+#         instance_id = robot_response["Item"]["instanceId"]
+#         instance_state = robot_response["Item"]["instanceState"]
         
-        if instance_state == "stopped":
-            # Start instance and run robot in simulate mode
-            return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=False)
-        elif instance_state == "running":
-            # Instance already running, use SSM to trigger robot execution
-            return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=True)
-        elif instance_state == "executing":
-            if force_restart:
-                # Kill current robot process and restart
-                return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=True, force_restart=True)
-            else:
-                return error_response(400, "Robot Already Executing", "Robot is currently executing. Set force_restart=true to kill and restart.")
-        else:
-            return error_response(400, "Robot Instance Not Stable", "Wait for a while and try again.")
-    else:
-        return error_response(400, "Robot Instance Not Found", "Please launch robot instance first using run_robot endpoint.")
+#         if instance_state == "stopped":
+#             # Start instance and run robot in simulate mode
+#             return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=False)
+#         elif instance_state == "running":
+#             # Instance already running, use SSM to trigger robot execution
+#             return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=True)
+#         elif instance_state == "executing":
+#             if force_restart:
+#                 # Kill current robot process and restart
+#                 return handle_simulate_robot_instance(user_id, process_id, version, instance_id, run_type, is_running=True, force_restart=True)
+#             else:
+#                 return error_response(400, "Robot Already Executing", "Robot is currently executing. Set force_restart=true to kill and restart.")
+#         else:
+#             return error_response(400, "Robot Instance Not Stable", "Wait for a while and try again.")
+#     else:
+#         return handle_launch_instance(user_id, process_id, version, trigger_type)
 
 
 def stop_robot(event, context):
