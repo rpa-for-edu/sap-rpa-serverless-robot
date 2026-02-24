@@ -9,7 +9,7 @@ from .resource_config import getCloudWatchConfig
 ec2_client = boto3.client('ec2')
 ssm_client = boto3.client('ssm')
 
-def launch_ec2(user_id, process_id, version,  instance_type="t3.micro", ami_id=None):
+def launch_ec2(user_id, process_id, version,  instance_type="t3a.micro", ami_id=None):
 
     if not ami_id:
         if instance_type.startswith("t4g"):  # ARM64 instances
@@ -115,8 +115,8 @@ source ./script.sh
             {
                 "DeviceName": "/dev/xvda",
                 "Ebs": {
-                    "VolumeSize": 15,
-                    "VolumeType": "standard",
+                    "VolumeSize": 10,
+                    "VolumeType": "gp3",
                     "DeleteOnTermination": True,
                 },
             }

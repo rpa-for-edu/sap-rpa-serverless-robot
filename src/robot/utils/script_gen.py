@@ -17,7 +17,8 @@ rpm -U ./amazon-cloudwatch-agent.rpm''')
 
 def instance_init(robot_bucket, robot_uri, cloudwatch_agent_start):
     return textwrap.dedent(f'''#!/bin/bash
-echo 'cd /home/ec2-user/robot \\
+echo '#!/bin/bash
+cd /home/ec2-user/robot \\
 && source ~/.bash_profile \\
 && source /etc/profile.d/conda.sh \\
 && {cloudwatch_agent_start} \\
