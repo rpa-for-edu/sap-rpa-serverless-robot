@@ -15,7 +15,7 @@ Globals:
       Variables:
         ROBOT_BUCKET: rpa-robot-bktest
         ROBOT_TABLE: robot
-        MAIN_SERVER_API: https://rpa-test.mchieens.io.vn/
+        MAIN_SERVER_API: http://54.252.181.103:8080
         SERVICE_KEY: e238e535-decb-4e18-9ef2-5094cf4b9a08
         MYSQL_HOST: rpa-mysql.cz0aoomugeal.ap-southeast-2.rds.amazonaws.com
         REPORT_AGENT_SQL: botuser

@@ -5,12 +5,12 @@ import pymysql
 from notification import *
 
 MAP_EVENT_TO_ARN = {
-    'event-gmail': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewEmailsFunction-x00iwDPvEQXr',
-    'event-drive': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewFilesFunction-ecqRwOPcGZk5',
-    'event-forms': 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-CheckNewResponsesFunction-4EiwCv5GVWfP',
+    'event-gmail': 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-CheckNewEmailsFunction-x00iwDPvEQXr',
+    'event-drive': 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-CheckNewFilesFunction-ecqRwOPcGZk5',
+    'event-forms': 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-CheckNewResponsesFunction-4EiwCv5GVWfP',
 }
 
-RUN_ROBOT_ARN = 'arn:aws:lambda:ap-southeast-1:678601387840:function:edu-rpa-serverless-robot-RunRobotFunction-CGVg2ON5Z83i'
+RUN_ROBOT_ARN = 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-RunRobotFunction-CGVg2ON5Z83i'
 
 def get_secret():
     secret_name = "edu-rpa/dev/secrets"
@@ -98,7 +98,7 @@ def handle_create_event_schedule(user_id, process_id, version, event_schedule):
         },
         'Target': {
             'Arn': MAP_EVENT_TO_ARN[event_schedule['type']],
-            'RoleArn': 'arn:aws:iam::678601387840:role/Event_Scheduler_Role',
+            'RoleArn': 'arn:aws:iam::825765386107:role/Robot_Scheduler_Role',
             'Input': json.dumps(create_check_event_input(user_id, process_id, version, event_schedule))
         },
         'ScheduleExpression': 'rate(10 minutes)',
