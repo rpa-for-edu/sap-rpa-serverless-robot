@@ -86,18 +86,18 @@ def handle_launch_instance(user_id, process_id, version, trigger_type, simulateM
     return success_response(robot_detail)
 
 def handle_start_robot_instance(user_id, process_id, version, instance_id, trigger_type):
-    robot_table = get_robot_table()
+    # robot_table = get_robot_table()
     
-    # Reset simulateMode to false for normal run (will shutdown after execution)
-    try:
-        process_id_version = f'{process_id}.{version}'
-        robot_table.update_item(
-            Key={"userId": user_id, "processIdVersion": process_id_version},
-            UpdateExpression="SET simulateMode = :sm",
-            ExpressionAttributeValues={":sm": False}
-        )
-    except Exception as e:
-        return error_response(400, "Cannot Update Simulate Mode", str(e))
+    # # Reset simulateMode to false for normal run (will shutdown after execution)
+    # try:
+    #     process_id_version = f'{process_id}.{version}'
+    #     robot_table.update_item(
+    #         Key={"userId": user_id, "processIdVersion": process_id_version},
+    #         UpdateExpression="SET simulateMode = :sm",
+    #         ExpressionAttributeValues={":sm": False}
+    #     )
+    # except Exception as e:
+    #     return error_response(400, "Cannot Update Simulate Mode", str(e))
     
     try:
         instance_response = start_ec2_robot(instance_id)

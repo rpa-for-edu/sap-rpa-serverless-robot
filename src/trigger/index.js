@@ -28,13 +28,18 @@ exports.triggerWriteRobotStateHandler = async (event, context) => {
             const dynamoData = record.dynamodb.NewImage;
             if(!dynamoData) {
                 continue;
-            } 
-            await handleUploadRobotStatus(connection, dynamoData);
+            }
+            try {
+                await handleUploadRobotStatus(connection, dynamoData);
+            } catch (recordError) {
+                // Log error but do NOT throw — prevents DynamoDB Stream infinite retry
+                console.error("Error processing record (skipping):", recordError.message);
+            }
         };
     } catch (error) {
         console.error("Error while connecting to MySQL:", error);
-        throw error;
-
+        // Do not throw — prevents DynamoDB Stream from retrying indefinitely
+        console.error("Returning success to prevent infinite retry loop");
     } finally {
         // Close MySQL connection
         if (connection && connection.state !== 'disconnected') {
@@ -70,13 +75,15 @@ exports.triggerWriteRobotDetailHandler = async (event, context) => {
             if(!dynamoData) {
                 continue;
             }
-            await handleUploadRobotRunDetail(connection, dynamoData);
-
+            try {
+                await handleUploadRobotRunDetail(connection, dynamoData);
+            } catch (recordError) {
+                console.error("Error processing detail record (skipping):", recordError.message);
+            }
         };
     } catch (error) {
         console.error("Error while connecting to MySQL:", error);
-        throw error;
-
+        console.error("Returning success to prevent infinite retry loop");
     } finally {
         // Close MySQL connection
         if (connection && connection.state !== 'disconnected') {
@@ -123,23 +130,26 @@ async function handleUploadRobotStatus(connection, dynamoData) {
     const currentTimeInGMTPlus7 = new Date(Date.now() + utcOffsetMs);
     const formattedTime = currentTimeInGMTPlus7.toISOString(); // Example ISO format
 
-    // Notify user if robot run successfully
+    // Write to robot_run_log table FIRST (before notification to avoid blocking)
+    const insertLogQuery = "INSERT INTO robot_run_log (instance_id, process_id_version, user_id, instance_state, launch_time) VALUES (?, ?, ?, ?, ?)";
+    const logValues = [instanceId, processIdVersion, userId, instanceState, launchTime];
+    await connection.promise().query(insertLogQuery, logValues);
+    console.log(`Written state '${instanceState}' to MySQL for instance ${instanceId}`);
+
+    // Notify user if robot run successfully (non-blocking, with timeout)
     let acceptedStatus = process.env["NOTIFY_STATE"]?.split(",") ?? [];
     if(acceptedStatus.includes(instanceState)) {
         console.log("Notify user", userId, "Robot State", instanceState)
-        await sendNotification(
-            userId,
-            `Robot ${processIdVersion}: ${instanceState}`,
-            `${formattedTime}: Robot ${processIdVersion} change state to ${instanceState}`,
-        )
+        try {
+            await sendNotification(
+                userId,
+                `Robot ${processIdVersion}: ${instanceState}`,
+                `${formattedTime}: Robot ${processIdVersion} change state to ${instanceState}`,
+            )
+        } catch (notifyError) {
+            console.error("Notification failed (non-blocking):", notifyError.message);
+        }
     }
-
-    // Write to robot_run_log table
-    const insertLogQuery = "INSERT INTO robot_run_log (instance_id, process_id_version, user_id, instance_state, launch_time) VALUES (?, ?, ?, ?, ?)";
-    const logValues = [instanceId, processIdVersion, userId, instanceState, launchTime];
-    await connection.promise().query(insertLogQuery, logValues, (error, results, fields) => {
-        if (error) throw error;
-    });
 }
 
 async function sendNotification(userId, title, content) {
@@ -151,14 +161,19 @@ async function sendNotification(userId, title, content) {
         type: 'ROBOT_EXECUTION'
     };
 
+    // 5-second timeout to prevent Lambda from timing out on unreachable servers
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Service-Key': `${process.env["SERVICE_KEY"]}` // Include the API key in the Authorization header
+                'Service-Key': `${process.env["SERVICE_KEY"]}`
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
         });
 
         if (!response.ok) {
@@ -167,10 +182,11 @@ async function sendNotification(userId, title, content) {
 
         const responseData = await response.json();
         console.log('Notification sent successfully:', responseData);
-        return responseData; // Optionally return data from the response
+        return responseData;
     } catch (error) {
-        console.error('Error sending notification:', error);
-        // Handle error appropriately (e.g., show error message to user)
+        console.error('Error sending notification:', error.message);
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

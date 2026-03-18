@@ -336,16 +336,9 @@ main() {
     echo "====== DEBUG: devdata content ======"
     ls -R ./devdata/ 2>/dev/null
     cat ./devdata/*.json 2>/dev/null || echo "No json files in devdata"
-
-    # # Check if simulate mode is enabled
-    # check_simulate_mode
     
     update_instance_state executing
     echo "====== Running Robot ======"
-    
-    # Fetch run_type from DynamoDB and set STEP_MODE before running robot
-    fetch_run_type
-    
     # Record activity timestamp
     echo $(date +%s) > /tmp/last_robot_activity
     
