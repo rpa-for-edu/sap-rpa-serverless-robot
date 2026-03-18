@@ -337,8 +337,8 @@ main() {
     ls -R ./devdata/ 2>/dev/null
     cat ./devdata/*.json 2>/dev/null || echo "No json files in devdata"
 
-    # Check if simulate mode is enabled
-    check_simulate_mode
+    # # Check if simulate mode is enabled
+    # check_simulate_mode
     
     update_instance_state executing
     echo "====== Running Robot ======"
