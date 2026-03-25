@@ -20,7 +20,7 @@ declare -A dependency_map=(
 install_dependencies_from_robot_file() {
     # Read the contents of the Robot Framework file
     local robot_code=$1
-    local dependencies=("robotframework" "rpaframework" "importlib-metadata>=6.0.0")
+    local dependencies=("rpa-runner" "rpaframework" "importlib-metadata>=6.0.0")
     
     imports=$(jq -r '.resource.imports[].name' <<< "$robot_code")
     
@@ -362,7 +362,7 @@ main() {
     fi
     
     # Enable logging for debugging
-    python3 -m robot --console verbose --output output.xml --log log.html --report report.html robot_exec.json >> /var/log/robot.log 2>&1
+    rpa-runner --output output.xml --log log.html --report report.html robot_exec.json >> /var/log/robot.log 2>&1
 
     robot_exit_code=$?
     

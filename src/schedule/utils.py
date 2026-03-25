@@ -1,4 +1,5 @@
 import json
+import os
 import boto3
 
 def json_prettier(jsonData) :
@@ -31,8 +32,8 @@ def handle_create_schedule(user_id, process_id, version, create_schedule_dto):
             'Mode': 'OFF'
         },
         'Target': {
-            'Arn': 'arn:aws:lambda:ap-southeast-1:825765386107:function:edu-rpa-serverless-robot-RunRobotFunction-CGVg2ON5Z83i ',
-            'RoleArn': 'arn:aws:iam::825765386107:role/Robot_Scheduler_Role',
+            'Arn': os.environ['RUN_ROBOT_FUNCTION_ARN'],
+            'RoleArn': os.environ['SCHEDULER_ROLE_ARN'],
             'Input': json.dumps({
                 "body": {
                     "user_id": user_id,

@@ -15,10 +15,10 @@ Globals:
       Variables:
         ROBOT_BUCKET: rpa-robot-bktest
         ROBOT_TABLE: robot
-        MAIN_SERVER_API: http://54.252.181.103:8080
+        MAIN_SERVER_API: http://130.33.114.1:8080
         SERVICE_KEY: e238e535-decb-4e18-9ef2-5094cf4b9a08
-        MYSQL_HOST: rpa-mysql.cz0aoomugeal.ap-southeast-2.rds.amazonaws.com
-        REPORT_AGENT_SQL: botuser
+        MYSQL_HOST: 130.33.114.1
+        REPORT_AGENT_SQL: admin
         REPORT_AGENT_PWD: rpa2210381
         REPORT_SCHEMA: report
         NOTIFY_STATE: running,setup,executing,cooldown,stopped
@@ -230,6 +230,10 @@ Resources:
       CodeUri: src/schedule/
       Handler: app.create_schedule
       Runtime: python3.9
+      Environment:
+        Variables:
+          RUN_ROBOT_FUNCTION_ARN: !GetAtt RunRobotFunction.Arn
+          SCHEDULER_ROLE_ARN: arn:aws:iam::825765386107:role/Robot_Scheduler_Role
       Policies:
         - Statement:
             - Effect: Allow
